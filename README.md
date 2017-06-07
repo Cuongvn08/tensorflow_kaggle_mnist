@@ -1,5 +1,5 @@
 # A tensorflow based standard NN for Kaggle mnist competition
- 
+
 This project presents how to use Tensorflow to implement a standard NN for Kaggle
 mnist competition.
 + config.py: consists of all settings, hyper-parameters
@@ -14,3 +14,11 @@ prediction of test data and submit.
 
 The best score of this model is 0.995 (Top 8%).
 Hyper-parameters tunning and more complex model would get better result.
+
+
+Development enviroment:
++ Window 10
++ Anaconda 3
++ Python 3.5
++ Tensorflow 1.1
++ Pycharm community
