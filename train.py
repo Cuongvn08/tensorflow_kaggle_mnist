@@ -38,17 +38,50 @@ def get_loss(logits, labels):
     return loss
 
 # get optimizer
-def get_optimizer(learning_rate):
-    return tf.train.AdamOptimizer(learning_rate = learning_rate,
-                                  beta1 = 0.9,
-                                  beta2 = 0.999,
-                                  epsilon = 1e-10,
-                                  use_locking = False,
-                                  name = 'Adam')
-
+def get_optimizer(learning_rate, optimizer):
+    if optimizer == eOptimizer.Adam:
+        return tf.train.AdamOptimizer(learning_rate = learning_rate,
+                                      beta1 = 0.9,
+                                      beta2 = 0.999,
+                                      epsilon = 1e-10,
+                                      use_locking = False,
+                                      name = 'Adam')
+    elif optimizer == eOptimizer.GD:
+        return tf.train.GradientDescentOptimizer(learning_rate = learning_rate,
+                                                 use_locking = False,
+                                                 name = 'GradientDescent')
+    elif optimizer == eOptimizer.RMS:
+        return tf.train.RMSPropOptimizer(learning_rate = learning_rate,
+                                         decay = 0.9,
+                                         momentum = 0.0,
+                                         epsilon = 1e-10,
+                                         use_locking = False,
+                                         centered = False,
+                                         name = 'RMSProp')
+    else:
+        assert '[train] optimizer error'
+    
+def print_log(logger, str):
+    print(str)
+    logger.write(str + '\n')
+    logger.flush()
+    
 ################################################################################
 ## MAIN PROGRAM
 ################################################################################
+# create log file
+with tf.name_scope('logger'):
+    log_path = 'result/log.txt'
+    if os.path.exists(log_path):
+        os.remove(log_path)
+    
+    log_dir = os.path.dirname(log_path)
+    if not os.path.exists(log_dir):
+        os.mkdir(log_dir)
+    
+    logger = open(log_path, 'w')
+    logger.write('kaggle_mnist_competition.\n\n')
+    
 # create session
 with tf.name_scope('session'):
     sess = tf.Session()
@@ -89,7 +122,7 @@ with tf.name_scope('model'):
 with tf.name_scope('train'):
     train_logit = model.logit(data, True, cfig[eKey.dropout])
     train_cost = get_loss(train_logit, label)
-    train_opt = get_optimizer(cfig[eKey.learning_rate]).minimize(train_cost)
+    train_opt = get_optimizer(cfig[eKey.learning_rate], cfig[eKey.optimizer]).minimize(train_cost)
 
     train_summary_list = []
     train_summary_list.append(tf.summary.scalar('train_cost', train_cost))
@@ -132,6 +165,12 @@ with tf.name_scope('saver'):
     saver = tf.train.Saver(max_to_keep = None)
 
 # train
+train_batches = get_batches(train_data.shape[0], cfig[eKey.batch_size])
+for start, end in train_batches:
+    str = '[train] train_batches: start={0}, end={1}'.format(start, end)
+    print_log(logger, str)
+    
+logger.write('\n')    
 with tf.name_scope('train'):
     with tf.device('/cpu:%d' % 0):
     #with tf.device('/gpu:%d' % 0):
@@ -161,13 +200,10 @@ with tf.name_scope('train'):
                 # log and print
                 elapsed_time = time.time() - start_time
                 date_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                print('[train] ' + '%s '             % date_time
-                                 + 'step %04d: '     % step
-                                 + 'tCost = %0.5f; ' % np.mean(train_costs)
-                                 + 'eCost = %0.5f; ' % eCost
-                                 + 'eAcc = %0.5f; '  % eAcc
-                                 + 'time = %0.5f(s); '  % elapsed_time)
-
+                str = '[train] {0} step {1:04}: tCost = {2:0.5}; eCost = {3:0.5}; eAcc = {4:0.5}; time = {5:0.5}(s);'.\
+                    format(date_time, step, np.mean(train_costs), eCost, eAcc, elapsed_time)
+                print_log(logger,str)
+                
                 # save summaries
                 summary_writer.add_summary(tSummary, step)
                 summary_writer.add_summary(eSummary, step)
@@ -198,4 +234,6 @@ with tf.name_scope('train'):
     summary_writer.close()
 
 plt.show()
+logger.write('The end.')
+logger.close()
 print('The end.')

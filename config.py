@@ -20,11 +20,17 @@ class eKey(Enum):
     data_dtype      = 'data_dtype'
     label_dtype     = 'label_dtype'
 
+    optimizer       = 'optimizer'
     learning_rate   = 'learning_rate'
     dropout         = 'dropout'
     l2_beta         = 'l2_beta'
 
 
+class eOptimizer(Enum):
+    Adam    = 1
+    GD      = 2
+    RMS     = 3
+    
 def get_config():
     config = {}
 
@@ -35,16 +41,16 @@ def get_config():
     config[eKey.checkpoint_dir]= 'result/checkpoint/'
     config[eKey.output_dir]    = 'result/output/'
 
-    config[eKey.train_ratio]   = 0.9999
-    config[eKey.batch_size]    = 100
-    config[eKey.num_epoch]     = 10000
-    config[eKey.eval_step]     = 5
+    config[eKey.train_ratio]   = 0.99
+    config[eKey.batch_size]    = 500
+    config[eKey.num_epoch]     = 5000
+    config[eKey.eval_step]     = 1
 
     config[eKey.data_dtype]    = np.float32
     config[eKey.label_dtype]   = np.int64
 
-    config[eKey.learning_rate] = 0.0001
-    config[eKey.dropout]       = 0.75
-    config[eKey.l2_beta]       = 0.0001
-
+    config[eKey.optimizer]     = eOptimizer.Adam
+    config[eKey.learning_rate] = 0.001
+    config[eKey.dropout]       = 0.9
+    
     return config

@@ -14,15 +14,15 @@ class Model:
         print('[model] data shape = {0}'.format(data.shape))
 
         with tf.variable_scope('conv1') as scope:
-            data = self.conv(data, 3, 8, [1, 1, 1, 1], scope.name + '_1')
-            data = self.conv(data, 3, 8, [1, 1, 1, 1], scope.name + '_2')
+            data = self.conv(data, 3, 64, [1, 1, 1, 1], scope.name + '_1')
+            data = self.conv(data, 3, 64, [1, 1, 1, 1], scope.name + '_2')
             data = tf.nn.max_pool(data, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
             data = self.dropout(data, isTrain, dropout)
             print('[model] data shape at conv1 = {0}'.format(data.shape))
 
         with tf.variable_scope('conv2') as scope:
-            data = self.conv(data, 3, 16, [1, 1, 1, 1], scope.name + '_1')
-            data = self.conv(data, 3, 16, [1, 1, 1, 1], scope.name + '_2')
+            data = self.conv(data, 3, 128, [1, 1, 1, 1], scope.name + '_1')
+            data = self.conv(data, 3, 128, [1, 1, 1, 1], scope.name + '_2')
             data = tf.nn.max_pool(data, [1, 3, 3, 1], [1, 2, 2, 1], 'SAME')
             data = self.dropout(data, isTrain, dropout)
             print('[model] data shape at conv2 = {0}'.format(data.shape))
@@ -40,7 +40,7 @@ class Model:
             data = self.fc(data, 10, scope.name)
             data = self.dropout(data, isTrain, dropout)
             print('[model] data shape at fc2 = {0}'.format(data.shape))
-
+            
         return data
 
     def conv(self, data, kernel_size, out_channel, stride, name, isActivate=True):
