@@ -19,25 +19,32 @@ from datetime import datetime
 ################################################################################
 ## HELPFUL FUNCTIONS
 ################################################################################
-# get batches
+## get batches
+# @param data_len: data length (number of examples)
+# @param batch_size: batch size (number of examples per training run)
+# return: zip of batch starts and ends
 def get_batches(data_len, batch_size):
     batch_starts = range(0, data_len, batch_size)
     batch_ends = [batch_start + batch_size for batch_start in batch_starts]
     return zip(batch_starts, batch_ends)
 
-# get loss
-def get_loss(logits, labels):
-    labels = tf.to_int64(labels)
+## get loss
+# @param logit: logit from model [None, num_classes]
+# @param label: class index [None]
+def get_loss(logit, label):
+    label = tf.to_int64(label)
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                                                        logits=logits,
-                                                        labels=labels,
+                                                        logits=logit,
+                                                        labels=label,
                                                         name='cross_entropy')
 
     loss = tf.reduce_mean(cross_entropy)
 
     return loss
 
-# get optimizer
+## get optimizer
+# @param learning_rate:
+# @param optimizer: optimizer method
 def get_optimizer(learning_rate, optimizer):
     if optimizer == eOptimizer.Adam:
         return tf.train.AdamOptimizer(learning_rate = learning_rate,
@@ -60,12 +67,39 @@ def get_optimizer(learning_rate, optimizer):
                                          name = 'RMSProp')
     else:
         assert '[train] optimizer error'
-    
+
+## print and log
 def print_log(logger, str):
     print(str)
     logger.write(str + '\n')
     logger.flush()
-    
+
+def get_confusion_matrix(pred, label):
+    num_classes = 10
+    confusion_matrix = np.zeros( (num_classes, num_classes), dtype=np.int)
+
+    for (pred_idx, label_idx) in zip(pred, label):
+        confusion_matrix[pred_idx, label_idx] += 1
+
+    return confusion_matrix
+
+def get_accuracy(confusion_matrix):
+    sum = np.sum(confusion_matrix)
+    true_pred = np.sum(confusion_matrix[i][i] for i in range(len(confusion_matrix[0])))
+    return true_pred/sum
+
+def get_precision(confusion_matrix):
+    # do nothing
+    pass
+
+def get_recall(confusion_matrix):
+    # do nothing
+    pass
+
+def get_F1score(confusion_matrix):
+    # do nothing
+    pass
+
 ################################################################################
 ## MAIN PROGRAM
 ################################################################################
@@ -80,8 +114,8 @@ with tf.name_scope('logger'):
         os.mkdir(log_dir)
     
     logger = open(log_path, 'w')
-    logger.write('kaggle_mnist_competition.\n\n')
-    
+    print_log(logger, 'kaggle_mnist_competition')
+
 # create session
 with tf.name_scope('session'):
     sess = tf.Session()
@@ -108,11 +142,11 @@ with tf.name_scope('placeholder'):
                           shape=[None, 28, 28, 1], name='data')
     label = tf.placeholder(cfig[eKey.label_dtype], shape=[None],name='label')
 
-    print('[train] shape of data placeholder {0}'.format(data.get_shape()))
-    print('[train] shape of label placeholder {0}'.format(label.get_shape()))
-
     tf.add_to_collection('data', data)
     tf.add_to_collection('label', label)
+
+    print_log(logger, '[train] shape of data placeholder {0}'.format(data.get_shape()))
+    print_log(logger, '[train] shape of label placeholder {0}'.format(label.get_shape()))
 
 # create model
 with tf.name_scope('model'):
@@ -124,8 +158,13 @@ with tf.name_scope('train'):
     train_cost = get_loss(train_logit, label)
     train_opt = get_optimizer(cfig[eKey.learning_rate], cfig[eKey.optimizer]).minimize(train_cost)
 
+    train_pred = tf.argmax(tf.nn.softmax(train_logit), axis=1, name='train_pred')
+    train_equal = tf.equal(train_pred, label)
+    train_acc = tf.reduce_mean(tf.cast(train_equal, tf.float32))
+
     train_summary_list = []
     train_summary_list.append(tf.summary.scalar('train_cost', train_cost))
+    train_summary_list.append(tf.summary.scalar('train_acc', train_acc))
     train_summary_merge = tf.summary.merge(train_summary_list)
 
 # get eval opt
@@ -134,15 +173,16 @@ with tf.name_scope('eval'):
     eval_logit = model.logit(data, False)
     eval_cost = get_loss(eval_logit, label)
 
-    pred = tf.argmax(tf.nn.softmax(eval_logit), axis=1, name='pred')
-    equal = tf.equal(pred, label)
-    acc = tf.reduce_mean(tf.cast(equal, tf.float32))
+    eval_pred = tf.argmax(tf.nn.softmax(eval_logit), axis=1, name='pred')
+    eval_equal = tf.equal(eval_pred, label)
+    eval_acc = tf.reduce_mean(tf.cast(eval_equal, tf.float32))
 
     eval_summary_list = []
     eval_summary_list.append(tf.summary.scalar('eval_cost', eval_cost))
+    eval_summary_list.append(tf.summary.scalar('eval_acc', eval_acc))
     eval_summary_merge = tf.summary.merge(eval_summary_list)
 
-    tf.add_to_collection('pred', pred)
+    tf.add_to_collection('pred', eval_pred)
 
 # initialize variables
 with tf.name_scope('initialize_variables'):
@@ -167,8 +207,7 @@ with tf.name_scope('saver'):
 # train
 train_batches = get_batches(train_data.shape[0], cfig[eKey.batch_size])
 for start, end in train_batches:
-    str = '[train] train_batches: start={0}, end={1}'.format(start, end)
-    print_log(logger, str)
+    print_log(logger, '[train] train_batches: start={0}, end={1}'.format(start, end))
     
 logger.write('\n')    
 with tf.name_scope('train'):
@@ -190,7 +229,7 @@ with tf.name_scope('train'):
 
             # eval
             if step % cfig[eKey.eval_step] == 0:
-                eval_fetches = [eval_logit, eval_cost, pred, equal, acc, eval_summary_merge]
+                eval_fetches = [eval_logit, eval_cost, eval_pred, eval_equal, eval_acc, eval_summary_merge]
 
                 feed_dict = {}
                 feed_dict[data] = eval_data
@@ -203,7 +242,12 @@ with tf.name_scope('train'):
                 str = '[train] {0} step {1:04}: tCost = {2:0.5}; eCost = {3:0.5}; eAcc = {4:0.5}; time = {5:0.5}(s);'.\
                     format(date_time, step, np.mean(train_costs), eCost, eAcc, elapsed_time)
                 print_log(logger,str)
-                
+
+                # get confusion matrix
+                confusion_matrix = get_confusion_matrix(ePred, eval_label)
+                if eAcc > 0.99:
+                    print(confusion_matrix)
+
                 # save summaries
                 summary_writer.add_summary(tSummary, step)
                 summary_writer.add_summary(eSummary, step)
